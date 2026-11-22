@@ -176,6 +176,18 @@ SEED_ROWS: dict[str, list[dict[str, Any]]] = {
             "恢复状态": "已恢复-开始追赶",
             "丢失行数": 12890, "回放代价": "预估42min",
             "恢复耗时": "已耗18min",
+            "分区位点凭据": {
+                "ds=2026-11-17": {
+                    "已提交位点": "pg_lsn.0/3F00000",
+                    "完成键区间": "txn_id 100000~118420",
+                    "状态": "已完成", "认领worker": "bf-worker-a",
+                },
+                "ds=2026-11-18": {
+                    "已提交位点": "pg_lsn.0/3F45000",
+                    "完成键区间": "txn_id 118421~126030",
+                    "状态": "回填中", "认领worker": "bf-worker-b",
+                },
+            },
         },
     ],
     "iceberg_commit": [
@@ -237,11 +249,33 @@ SEED_ROWS: dict[str, list[dict[str, Any]]] = {
     "backfill_run": [
         {
             "id": 1, "status": "回填中", "pending": True, "abnormal": False,
-            "任务编号": "BF-0001", "目标表": "payment_log_cdc",
+            "任务编号": "BF-0001", "批次号": "BF-BATCH-SEED01", "目标表": "payment_log_cdc",
             "起始位点": "pg_lsn.0/3E82A00",
             "截止位点": "pg_lsn.0/3FAB100",
             "回填模式": "批量并行回填", "并行粒度": "按小时分区",
             "当前进度": "42%", "回填速率": "350 eps",
+        },
+    ],
+    "backfill_partition": [
+        {
+            "id": 1, "status": "已完成", "pending": False, "abnormal": False,
+            "明细编号": "BFP-BF-BATCH-SEED01-01", "批次号": "BF-BATCH-SEED01",
+            "回填任务": "BF-0001", "检查点id": 2, "数据流": "payment_log_cdc",
+            "分区": "ds=2026-11-17",
+            "起始位点": "pg_lsn.0/3E82A00", "截止位点": "pg_lsn.0/3F00000",
+            "已提交位点": "pg_lsn.0/3F00000",
+            "完成键区间": "txn_id 100000~118420",
+            "认领worker": "bf-worker-a", "中断原因": "",
+        },
+        {
+            "id": 2, "status": "回填中", "pending": True, "abnormal": False,
+            "明细编号": "BFP-BF-BATCH-SEED01-02", "批次号": "BF-BATCH-SEED01",
+            "回填任务": "BF-0001", "检查点id": 2, "数据流": "payment_log_cdc",
+            "分区": "ds=2026-11-18",
+            "起始位点": "pg_lsn.0/3F00000", "截止位点": "pg_lsn.0/3FAB100",
+            "已提交位点": "pg_lsn.0/3F45000",
+            "完成键区间": "txn_id 118421~126030",
+            "认领worker": "bf-worker-b", "中断原因": "",
         },
     ],
     "alert_rule": [

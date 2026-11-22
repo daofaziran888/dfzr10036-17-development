@@ -19,6 +19,7 @@ from app.services.compaction import CompactionService
 from app.services.expire_snap import ExpireSnapService
 from app.services.metric_aggr import MetricAggrService
 from app.services.backfill_run import BackfillRunService
+from app.services.backfill_partition import BackfillPartitionService
 from app.services.alert_rule import AlertRuleService
 from app.services.data_diff import DataDiffService
 from app.services.task_schedule import TaskScheduleService
@@ -43,6 +44,7 @@ SERVICES: dict[str, BaseModuleService] = {
     "expire_snap": ExpireSnapService(),
     "metric_aggr": MetricAggrService(),
     "backfill_run": BackfillRunService(),
+    "backfill_partition": BackfillPartitionService(),
     "alert_rule": AlertRuleService(),
     "data_diff": DataDiffService(),
     "task_schedule": TaskScheduleService(),

@@ -8,8 +8,19 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from app.schemas import ActionPayload, ActionResult, EntryPayload, PageResult
+from app.schemas import (
+    ActionPayload,
+    ActionResult,
+    ClaimDetailPayload,
+    DispatchBackfillPayload,
+    EntryPayload,
+    InterruptDetailPayload,
+    PageResult,
+    ReportProgressPayload,
+)
 from app.services import service_for
+from app.services.backfill_partition import BackfillPartitionService
+from app.services.checkpoint import CheckpointService
 
 router = APIRouter(prefix="/api", tags=["业务资源"])
 
@@ -95,6 +106,64 @@ def create_entry(module: str, payload: EntryPayload) -> ActionResult:
 def run_action(module: str, entry_id: int, payload: ActionPayload) -> ActionResult:
     service = require_service(module)
     entry, message = service.run_action(entry_id, payload.action.strip())
+    return ActionResult(ok=entry is not None, message=message, entry=entry)
+
+
+# ---- 断点恢复：整组分区增量回填派发与续跑 ----
+
+@router.post("/checkpoint/{checkpoint_id}/backfill-batches")
+def dispatch_partition_backfill(checkpoint_id: int, payload: DispatchBackfillPayload) -> dict[str, Any]:
+    """把多条带起止位点的分区缺口批量调度成回填分区任务明细（批次号幂等）。"""
+    service = service_for("checkpoint")
+    if not isinstance(service, CheckpointService):
+        raise HTTPException(status_code=404, detail="断点恢复模块不可用")
+    gaps = [gap.model_dump() for gap in payload.gaps]
+    return service.dispatch_partition_backfill(checkpoint_id, gaps, batch_no=payload.batch_no)
+
+
+@router.get("/checkpoint/backfill-batches/{batch_no}")
+def resume_backfill_batch(batch_no: str) -> dict[str, Any]:
+    """中断后续跑：返回批次内可认领的未完分区，已确认分区的数据直接沿用。"""
+    service = service_for("checkpoint")
+    if not isinstance(service, CheckpointService):
+        raise HTTPException(status_code=404, detail="断点恢复模块不可用")
+    return service.resume_batch(batch_no)
+
+
+@router.post("/backfill_partition/{detail_id}/claim")
+def claim_backfill_partition(detail_id: int, payload: ClaimDetailPayload) -> ActionResult:
+    """认领未完分区明细；已中断的分区可被新 worker 接手续跑。"""
+    service = service_for("backfill_partition")
+    if not isinstance(service, BackfillPartitionService):
+        raise HTTPException(status_code=404, detail="回填分区明细模块不可用")
+    entry, message = service.claim_detail(detail_id, payload.worker_id)
+    return ActionResult(ok=entry is not None, message=message, entry=entry)
+
+
+@router.post("/backfill_partition/{detail_id}/progress")
+def report_backfill_partition_progress(
+    detail_id: int, payload: ReportProgressPayload
+) -> ActionResult:
+    """把实际完成的键/行区间与已提交位点回写给断点恢复核对。"""
+    service = service_for("backfill_partition")
+    if not isinstance(service, BackfillPartitionService):
+        raise HTTPException(status_code=404, detail="回填分区明细模块不可用")
+    entry, message = service.report_progress(
+        detail_id,
+        committed_position=payload.committed_position,
+        finished_key_range=payload.finished_key_range,
+        finished=payload.finished,
+    )
+    return ActionResult(ok=entry is not None, message=message, entry=entry)
+
+
+@router.post("/backfill_partition/{detail_id}/interrupt")
+def interrupt_backfill_partition(detail_id: int, payload: InterruptDetailPayload) -> ActionResult:
+    """模拟源端断连：保留已提交位点，仅把明细置为已中断。"""
+    service = service_for("backfill_partition")
+    if not isinstance(service, BackfillPartitionService):
+        raise HTTPException(status_code=404, detail="回填分区明细模块不可用")
+    entry, message = service.interrupt_detail(detail_id, payload.reason or "")
     return ActionResult(ok=entry is not None, message=message, entry=entry)
 
 
